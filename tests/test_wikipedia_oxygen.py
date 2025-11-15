@@ -50,7 +50,17 @@ def _open_earth_article(page: Page) -> None:
     print("CURRENT URL:", page.url)
 
 
-def _get_oxygen_percentage(page: Page) -> float:
+def _normalize_spaces(s: str) -> str:
+    return (
+        s.replace("\xa0", " ")
+         .replace("\u202f", " ")
+         .replace("\u2009", " ")
+         .replace("\u2014", "—")  # тире тоже иногда разное
+         .strip()
+    )
+
+
+def _validate_oxygen_percentage(page: Page, expected_percentage: float) -> float:
     """
     Ищем строку про кислород в инфобоксе:
     - подсвечиваем ИМЕННО число 20,95,
@@ -59,18 +69,21 @@ def _get_oxygen_percentage(page: Page) -> float:
     """
     infobox = page.locator("table.infobox")
     oxygen_row = infobox.locator("tr").filter(has_text="кислород").nth(0)
+    text_oxygen = str(expected_percentage).replace(".", ",")
 
     # Получаем текст всей строки
     row_text = oxygen_row.inner_text()
     print("OXYGEN ROW TEXT:", row_text)
 
-    # Проверяем, что в строке действительно есть нужное число
-    number_text = "20,95"
-    assert number_text in row_text, (
+    # Проверяем, что в строке действительно есть нужное число и что это именно кислород
+    number_text = "{expected_percentage} % — кислород (O2)".format(expected_percentage=text_oxygen)
+    assert _normalize_spaces(number_text) in _normalize_spaces(row_text), (
         f"В строке с кислородом нет текста {number_text}: {row_text}"
     )
+    print("NUMBER TEXT:", row_text)
 
     # Подсвечиваем только число 20,95 внутри строки
+    number_highlight_text = text_oxygen
     oxygen_row.evaluate(
         """
         (rowElement, numberText) => {
@@ -102,7 +115,7 @@ def _get_oxygen_percentage(page: Page) -> float:
             }
         }
         """,
-        number_text,
+        number_highlight_text,
     )
 
     # Прокрутка к числу в центр экрана
@@ -115,9 +128,6 @@ def _get_oxygen_percentage(page: Page) -> float:
     # Дадим время, чтобы подсветка была хорошо видна на видео
     time.sleep(3)
 
-    # Возвращаем значение как float
-    return 20.95
-
 
 # ---------- ТЕСТЫ ----------
 
@@ -127,12 +137,7 @@ def test_oxygen_percentage_positive(page: Page) -> None:
     проверяем, что содержание кислорода ~20.95 %.
     """
     _open_earth_article(page)
-    value = _get_oxygen_percentage(page)
-
-    assert value == pytest.approx(20.95, rel=1e-3), (
-        f"Ожидали 20.95 % кислорода в атмосфере Земли, "
-        f"но получили {value:.3f} %"
-    )
+    _validate_oxygen_percentage(page, 20.95)
 
 
 def test_oxygen_percentage_negative(page: Page) -> None:
@@ -141,9 +146,5 @@ def test_oxygen_percentage_negative(page: Page) -> None:
     убеждаемся, что значение НЕ равно 25 %.
     """
     _open_earth_article(page)
-    value = _get_oxygen_percentage(page)
+    _validate_oxygen_percentage(page, 25.0)
 
-    assert value != pytest.approx(25.0, rel=1e-3), (
-        f"Негативная проверка провалена: кислород оказался 25 %, "
-        f"получили {value:.3f} %"
-    )
