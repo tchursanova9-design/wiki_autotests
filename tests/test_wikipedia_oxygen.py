@@ -146,5 +146,6 @@ def test_oxygen_percentage_negative(page: Page) -> None:
     убеждаемся, что значение НЕ равно 25 %.
     """
     _open_earth_article(page)
-    _validate_oxygen_percentage(page, 25.0)
+    with pytest.raises(AssertionError):
+        _validate_oxygen_percentage(page, 25.0)
 
